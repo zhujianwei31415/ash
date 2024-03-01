@@ -254,7 +254,7 @@ class OpenMMTheory:
             else:
                 # Load CHARMM PSF files via native routine.
                 self.psf = openmm.app.CharmmPsfFile(psffile)
-                self.params = openmm.app.CharmmParameterSet(charmmtopfile, charmmprmfile, permissive=True)
+                self.params = openmm.app.CharmmParameterSet(*charmmtopfile, *charmmprmfile, permissive=True)
                 # Grab resnames from psf-object
                 self.resnames = [self.psf.atom_list[i].residue.resname for i in range(0, len(self.psf.atom_list))]
                 self.resids = [self.psf.atom_list[i].residue.idx for i in range(0, len(self.psf.atom_list))]
