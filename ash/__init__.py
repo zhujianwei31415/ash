@@ -78,6 +78,7 @@ from .interfaces.interface_ORCA import ORCATheory, counterpoise_calculation_ORCA
     read_ORCA_json_file, create_ORCA_json_file,get_densities_from_ORCA_json,grab_ORCA_wfn,ORCA_orbital_setup
 import ash.interfaces.interface_ORCA
 
+from .interfaces.interface_LightAIMD import LightAIMDTheory
 from .interfaces.interface_Psi4 import Psi4Theory
 from .interfaces.interface_dalton import DaltonTheory
 from .interfaces.interface_pyscf import PySCFTheory, pyscf_MR_correction, pyscf_CCSD_T_natorb_selection,KS_inversion_kspies,DFA_error_analysis
