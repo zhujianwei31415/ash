@@ -323,11 +323,12 @@ class Psi4Theory:
                 # Adding MM charges as pointcharges if PC=True
                 # Might be easier to use PE and potfile ??
                 if PC == True:
-                    inputfile.write('Chrgfield = QMMM()\n')
+                    inputfile.write('external_potentials = np.array([\n')
                     # Mmcoords in Angstrom
                     for mmcharge, mmcoord in zip(MMcharges, current_MM_coords):
-                        inputfile.write('Chrgfield.extern.addCharge({}, {}, {}, {})\n'.format(mmcharge, mmcoord[0], mmcoord[1], mmcoord[2]))
-                    inputfile.write('psi4.set_global_option_python(\'EXTERN\', Chrgfield.extern)\n')
+                        inputfile.write('[{}, {}, {}, {}],\n'.format(mmcharge, mmcoord[0], mmcoord[1], mmcoord[2]))
+                    inputfile.write('])\n')
+                    inputfile.write('external_potentials[:,[1,2,3]] /= psi_bohr2angstroms\n')
                 inputfile.write('\n')
                 #Adding Psi4 settings
                 inputfile.write('set {\n')
@@ -369,13 +370,23 @@ class Psi4Theory:
                 #RUNNING
                 if Grad==True:
                     #inputfile.write('scf_energy, wfn = gradient(\'scf\', dft_functional=\'{}\', return_wfn=True)\n'.format(self.psi4functional))
-                    inputfile.write("energy, wfn = gradient(\'{}\', return_wfn=True)\n".format(self.psi4method))
-                    inputfile.write("print(\"FINAL TOTAL ENERGY :\", wfn.energy())")
+                    if PC == True:
+                        inputfile.write("energy, wfn = energy(\'{}\', return_wfn=True, external_potentials=external_potentials)\n".format(self.psi4method))
+                    else:
+                        inputfile.write("energy, wfn = energy(\'{}\', return_wfn=True)\n".format(self.psi4method))
+                    inputfile.write("print('FINAL GRADIENT')\n")
+                    inputfile.write("for i in np.asarray(gradient(\'{}\', ref_wfn=wfn)): print(*i)\n".format(self.psi4method))
+                    inputfile.write("print('END GRADIENT')\n")
+                    if PC == True:
+                        inputfile.write("print('FINAL PCGRADIENT')\n")
+                        inputfile.write("for i in np.asarray(wfn.external_pot().gradient_on_charges()): print(*i)\n")
+                        inputfile.write("print('END PCGRADIENT')\n")
                 else:
                     #inputfile.write('scf_energy, wfn = energy(\'scf\', dft_functional=\'{}\', return_wfn=True)\n'.format(self.psi4functional))
                     inputfile.write('energy, wfn = energy(\'{}\', return_wfn=True)\n'.format(self.psi4method))
-                    inputfile.write("print(\"FINAL TOTAL ENERGY :\", energy)")
-                    inputfile.write('\n')
+                inputfile.write("print('FINAL TOTAL ENERGY')\n")
+                inputfile.write("print(energy)\n")
+                inputfile.write("print('END TOTAL ENERGY')\n")
                 #Fchk write or not
                 if self.fchkwrite == True:
                     inputfile.write('#Fchk write\n')
@@ -401,12 +412,12 @@ class Psi4Theory:
                 pass
 
             #Delete big WF files. Todo: move to cleanup function?
-            wffiles=glob.glob('*.34')
+            wffiles=glob.glob('*.34')+glob.glob('*.35')+glob.glob('*.clean')
             for wffile in wffiles:
                 os.remove(wffile)
 
             #Grab energy and possibly gradient
-            self.energy, self.gradient = grabPsi4EandG(self.filename + '.out', len(qm_elems), Grad)
+            self.energy, self.gradient, self.pcgradient = grabPsi4EandGNew(self.filename + '.out', len(qm_elems), Grad, len(MMcharges), PC)
 
             #TODO: write in error handling here
 
@@ -415,7 +426,10 @@ class Psi4Theory:
             if Grad == True:
                 print("Single-point PSI4 energy:", self.energy)
                 print_time_rel(module_init_time, modulename='Psi4 run', moduleindex=2)
-                return self.energy, self.gradient
+                if PC == True:
+                    return self.energy, self.gradient, self.pcgradient
+                else:
+                    return self.energy, self.gradient
             else:
                 print("Single-point PSI4 energy:", self.energy)
                 print_time_rel(module_init_time, modulename='Psi4 run', moduleindex=2)
@@ -472,3 +486,39 @@ def grabPsi4EandG(outfile, numatoms, Grad):
         print("Found no energy in Psi4 outputfile:", outfile)
         ashexit()
     return energy, gradient
+
+def grabPsi4EandGNew(outfile, numatoms, Grad, numcharges, PC):
+    energy, gradient, pcgradient = None, [], []
+    energygrab, gradgrab, pcgradgrab = False, False, False
+    with open(outfile, 'r') as fin:
+        for line in fin:
+            if line.startswith('FINAL TOTAL ENERGY'):
+                energygrab = True
+            elif energygrab and line.startswith('END TOTAL ENERGY'):
+                energygrab = False
+            elif energygrab:
+                energy = float(line.split()[0])
+
+            if Grad and line.startswith('FINAL GRADIENT'):
+                gradgrab = True
+            elif gradgrab and line.startswith('END GRADIENT'):
+                gradgrab = False
+            elif gradgrab:
+                gradient.append([float(_) for _ in line.strip(' \n[]').split()])
+
+            if Grad and PC and line.startswith('FINAL PCGRADIENT'):
+                pcgradgrab = True
+            elif pcgradgrab and line.startswith('END PCGRADIENT'):
+                pcgradgrab = False
+            elif pcgradgrab:
+                pcgradient.append([float(_) for _ in line.strip(' \n[]').split()])
+    if energy == None:
+        print("Found no energy in Psi4 outputfile:", outfile)
+        ashexit()
+    if Grad and len(gradient) != numatoms:
+        print("Wrong number of gradient in file", outfile)
+        ashexit()
+    if PC and len(pcgradient) != numcharges:
+        print("Wrong number of pcgradient in file", outfile)
+        ashexit()
+    return energy, np.asarray(gradient), np.asarray(pcgradient)
