@@ -103,13 +103,16 @@ class LightAIMDTheory:
         # binarypath
         cmds.extend( [self.lightaimdpath] )
 
-        #Write input corrds
+        # Write input corrds
         with open(self.filename+'.xyz', 'w') as fin:
             fin.write(f'{len(current_coords)}\n')
             fin.write(f'charge {charge} multiplicity {mult} unit angstrom\n')
             for el, c in zip(qm_elems, current_coords):
                 fin.write(f'{el} {c[0]} {c[1]} {c[2]}\n')
         cmds.extend(['--mol', f'{self.filename}.xyz'])
+
+        # Write output json file
+        cmds.extend(['--output', f'{self.filename}.json'])
 
         # write MM charges as pointcharges if PC=True
         if PC == True:
@@ -118,7 +121,7 @@ class LightAIMDTheory:
                 # Mmcoords in Angstrom
                 for mmcharge, mmcoord in zip(MMcharges, current_MM_coords):
                     fin.write(f'{mmcharge} {mmcoord[0]} {mmcoord[1]} {mmcoord[2]}\n')
-            cmds.extend(['--mm-file', f'{self.filename}.pc'])
+            cmds.extend(['--ext-file', f'{self.filename}.pc'])
 
         for k, v in self.settings.items():
             if k == 'mpicmd':
@@ -150,7 +153,7 @@ class LightAIMDTheory:
             return self.energy
 
 
-#grab energy from output
+# grab energy from output
 def grabLightAIMDEandG(outfile, numatoms, Grad, numcharges, PC):
     energy, gradient, pcgradient = None, [], []
     energygrab, gradgrab, pcgradgrab = False, False, False
